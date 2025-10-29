@@ -1,0 +1,217 @@
+<!doctype html>
+<html lang="hi">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Speechma-like Free TTS</title>
+  <style>
+    :root{font-family:system-ui,-apple-system,Segoe UI,Roboto,"Noto Sans",sans-serif}
+    body{margin:0;padding:18px;background:#f7f8fb;color:#111}
+    .card{max-width:760px;margin:10px auto;padding:16px;background:#fff;border-radius:12px;box-shadow:0 6px 22px rgba(10,20,50,0.06)}
+    h1{font-size:1.05rem;margin:0 0 8px}
+    label{display:block;margin-top:10px;font-size:0.9rem;color:#333}
+    textarea{width:100%;min-height:160px;padding:12px;border-radius:8px;border:1px solid #e1e6f0;resize:vertical;font-size:15px;box-sizing:border-box}
+    .row{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
+    select,input[type="text"]{padding:10px;border-radius:8px;border:1px solid #e1e6f0;font-size:14px}
+    button{padding:10px 14px;border-radius:10px;border:0;background:#0b75ef;color:#fff;font-weight:600;cursor:pointer}
+    button.ghost{background:#e6eefc;color:#0b75ef;border:1px solid #cfe0ff}
+    .small{font-size:0.85rem;color:#556}
+    .hint{font-size:0.82rem;color:#667;margin-top:8px}
+    footer{max-width:760px;margin:12px auto;text-align:center;color:#666;font-size:0.82rem}
+    @media (max-width:460px){ .row{flex-direction:column} }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h1>Speechma-style Free TTS (Mobile Friendly)</h1>
+    <div class="small">Browser TTS + optional MP3 download via VoiceRSS. Save this file as <code>speechma_like_tts.html</code> and open in mobile browser.</div>
+
+    <label for="lang">Language / भाषा</label>
+    <select id="lang">
+      <option value="hi-IN">Hindi (hi-IN)</option>
+      <option value="en-US">English (en-US)</option>
+      <option value="bn-IN">Bengali (bn-IN)</option>
+      <option value="mr-IN">Marathi (mr-IN)</option>
+      <option value="ta-IN">Tamil (ta-IN)</option>
+      <option value="te-IN">Telugu (te-IN)</option>
+      <option value="kn-IN">Kannada (kn-IN)</option>
+      <option value="ur-PK">Urdu (ur)</option>
+    </select>
+
+    <label for="gender">Voice Gender / आवाज</label>
+    <select id="gender">
+      <option value="female">Female (महिला)</option>
+      <option value="male">Male (पुरुष)</option>
+      <option value="any">Any / Best Available</option>
+    </select>
+
+    <label for="rate">Speed (Rate)</label>
+    <select id="rate">
+      <option value="0.9">Slow</option>
+      <option value="1.0" selected>Normal</option>
+      <option value="1.15">Slightly Fast</option>
+      <option value="1.3">Fast</option>
+    </select>
+
+    <label for="text">Text / टेक्स्ट</label>
+    <textarea id="text">उसने जीभ निकालकर挑戰 दी,
+पर अगले ही पल ज़बरदस्त इनाम मिला।
+भोली दिखने वाली लड़की हर दिन पिंजरे में सेक्सी योगा करती,
+पर असल में वो अकेले पूरा पुलिस स्टेशन मिटा सकती थी।
+इसलिए जेल में उसके लिए अलग सेल था।
+हर बार खाना देने सौ हथियारबंद पुलिसवाले तैनात रहते।
+एक दिन चेकिंग के दौरान लड़की ने अचानक हमला कर दिया।
+सब घबरा गए, टेज़र से ही वो काबू में आई।
+फिर उसे गुप्त ठिकाने पर भेज दिया गया,
+जहाँ उसे भयानक सज़ा मिली —
+अब वो शायद कभी भागने की सोच भी नहीं पाएगी।</textarea>
+
+    <div class="row" style="margin-top:12px">
+      <button id="play">🔊 Play (Browser TTS)</button>
+      <button id="stop" class="ghost">⏹ Stop</button>
+      <button id="download">⬇️ Generate MP3 (VoiceRSS)</button>
+    </div>
+
+    <label for="voicerss">VoiceRSS API key (optional — for MP3 download)</label>
+    <input id="voicerss" type="text" placeholder="Paste VoiceRSS API key here (optional)">
+
+    <div class="hint">VoiceRSS: free API key available at <code>https://www.voicerss.org/</code>. If you don't want signup, use Play and record externally.</div>
+  </div>
+
+  <footer>Deploy on GitHub Pages or Replit: just upload this single HTML file.</footer>
+
+<script>
+  // --- elements
+  const textEl = document.getElementById('text');
+  const playBtn = document.getElementById('play');
+  const stopBtn = document.getElementById('stop');
+  const downloadBtn = document.getElementById('download');
+  const langSel = document.getElementById('lang');
+  const genderSel = document.getElementById('gender');
+  const rateSel = document.getElementById('rate');
+  const keyEl = document.getElementById('voicerss');
+
+  // speechSynthesis setup
+  const synth = window.speechSynthesis;
+  let voices = [];
+  let chosenVoice = null;
+  function loadVoices(){
+    voices = synth.getVoices() || [];
+  }
+  loadVoices();
+  if (speechSynthesis.onvoiceschanged !== undefined){
+    speechSynthesis.onvoiceschanged = loadVoices;
+  }
+
+  // pick voice matching lang + gender preference
+  function pickVoice(lang, genderPref){
+    // filter by lang start match
+    const byLang = voices.filter(v => v.lang && v.lang.toLowerCase().startsWith(lang.toLowerCase().split('-')[0]));
+    // safer: also accept exact startsWith full tag
+    const byLangExact = voices.filter(v => v.lang && v.lang.toLowerCase().startsWith(lang.toLowerCase()));
+    const pool = byLangExact.length ? byLangExact : (byLang.length ? byLang : voices);
+    if (!pool || pool.length===0) return null;
+    // simple heuristic on name for female/male
+    if (genderPref === 'female'){
+      return pool.find(v=>/female|woman|woman/i.test(v.name)) || pool.find(v=>/female|FEMALE|woman/i.test(v.localService)) || pool[0];
+    } else if (genderPref === 'male'){
+      return pool.find(v=>/male|man|man/i.test(v.name)) || pool[0];
+    } else {
+      return pool[0];
+    }
+  }
+
+  function speakText(){
+    if (!('speechSynthesis' in window)){
+      alert('Your browser does not support Web Speech API. Try latest Chrome/Edge on mobile.');
+      return;
+    }
+    const txt = textEl.value.trim();
+    if (!txt) return;
+    synth.cancel();
+
+    const utter = new SpeechSynthesisUtterance(txt);
+    const lang = langSel.value || 'hi-IN';
+    utter.lang = lang;
+    utter.rate = parseFloat(rateSel.value) || 1.0;
+    // pitch tweak for more "female-ish" tone if requested
+    utter.pitch = (genderSel.value === 'female') ? 1.05 : 0.95;
+
+    // select voice if available
+    const v = pickVoice(lang, genderSel.value);
+    if (v) utter.voice = v;
+
+    utter.onend = ()=>{ /* done */ };
+    synth.speak(utter);
+  }
+
+  playBtn.addEventListener('click', ()=> speakText());
+  stopBtn.addEventListener('click', ()=> synth.cancel());
+
+  // --- VoiceRSS MP3 generation & download ---
+  // VoiceRSS endpoint: https://api.voicerss.org/?key=API_KEY&hl=hi-in&src=Text&c=MP3&f=44khz_16bit_stereo
+  async function generateMp3(apiKey, lang, text){
+    if (!apiKey){
+      alert('VoiceRSS API key missing. Paste your free key from voicerss.org in the input field.');
+      return;
+    }
+    // limit text size for GET; VoiceRSS can accept long text via POST but here we use GET with URLSearchParams
+    const params = new URLSearchParams({
+      key: apiKey,
+      hl: lang.toLowerCase(), // e.g., hi-in
+      src: text,
+      c: 'MP3',
+      f: '44khz_16bit_stereo',
+      r: '0' // rate
+    });
+    const url = 'https://api.voicerss.org/?' + params.toString();
+    try {
+      downloadBtn.disabled = true;
+      downloadBtn.textContent = 'Generating...';
+      const resp = await fetch(url);
+      if (!resp.ok){
+        const txt = await resp.text().catch(()=>null);
+        throw new Error('VoiceRSS error: '+ resp.status + ' ' + (txt||''));
+      }
+      const blob = await resp.blob();
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = 'tts_output.mp3';
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(()=>URL.revokeObjectURL(a.href), 10000);
+    } catch (err){
+      console.error(err);
+      alert('Failed to generate MP3: ' + (err.message||err));
+    } finally {
+      downloadBtn.disabled = false;
+      downloadBtn.textContent = '⬇️ Generate MP3 (VoiceRSS)';
+    }
+  }
+
+  downloadBtn.addEventListener('click', ()=>{
+    const apiKey = keyEl.value.trim();
+    const langCode = langSel.value.toLowerCase().replace('-','-'); // voiceRSS expects hi-in etc
+    const text = textEl.value.trim();
+    if (!text){ alert('Please enter text.'); return; }
+    generateMp3(apiKey || '', langCode, text);
+  });
+
+  // Small helper: if device has no hi voice, hint user after 1st click
+  let hinted = false;
+  playBtn.addEventListener('click', ()=>{
+    setTimeout(()=>{
+      if (!hinted && voices.length>0){
+        const hiFound = voices.some(v => v.lang && v.lang.toLowerCase().startsWith('hi'));
+        if (!hiFound){
+          hinted = true;
+          // show small hint
+          console.log('No hi-IN voice present. Browser will choose closest available.');
+        }
+      }
+    },500);
+  });
+</script>
+</body>
+</html>
